@@ -4,9 +4,11 @@ import folium
 from streamlit_folium import st_folium
 import os
 
+
+
 # Set page config to wide layout
 st.set_page_config(layout="wide")
-
+st.title("Election Map Challenge")
 # Define electoral votes and coordinates for each state (complete list)
 electoral_votes = {
     "Alabama": (9, [32.806671, -86.791130]),
