@@ -1,0 +1,8 @@
+pandas
+openai
+streamlit_extras
+plotly
+nfl_data_py
+streamlit
+nba_api
+streamlit_chat
