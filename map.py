@@ -69,6 +69,21 @@ swing_states = [
     "New Hampshire", "Minnesota", "Iowa"
 ]
 
+non_swing_results = {
+    "California": "blue", "Texas": "red", "New York": "blue", "Washington": "blue",
+    "Oregon": "blue", "Idaho": "red", "Montana": "red", "Wyoming": "red",
+    "Utah": "red", "New Mexico": "blue", "Colorado": "blue", "North Dakota": "red",
+    "South Dakota": "red", "Nebraska": "red", "Kansas": "red", "Oklahoma": "red",
+    "Missouri": "red", "Arkansas": "red", "Louisiana": "red", "Mississippi": "red",
+    "Alabama": "red", "South Carolina": "red", "Tennessee": "red", "Kentucky": "red",
+    "West Virginia": "red", "Indiana": "red", "Ohio": "red", "Maine": "blue",
+    "Vermont": "blue", "New Jersey": "blue", "Connecticut": "blue", "Rhode Island": "blue",
+    "Massachusetts": "blue", "Delaware": "blue", "Maryland": "blue", "Illinois": "blue",
+    "Hawaii": "blue", "Alaska": "red"
+}
+
+
+
 # Load or initialize ballots CSV
 ballots_file = "ballots.csv"
 if not os.path.exists(ballots_file):
@@ -108,7 +123,15 @@ if screen == "Submit Ballot":
             # Show only swing states by default
             show_swing_states = st.checkbox("Show only Swing States", value=True)
             states_to_show = swing_states if show_swing_states else list(electoral_votes.keys())
-            
+            if st.button("Autopopulate Non-Swing States"):
+                for state, color in non_swing_results.items():
+                    if state not in swing_states:
+                        st.session_state.user_map[state] = color
+                        # Update electoral totals
+                        if color == "blue":
+                            st.session_state.electoral_totals["blue"] += electoral_votes[state][0]
+                        elif color == "red":
+                            st.session_state.electoral_totals["red"] += electoral_votes[state][0]
             # Select a state and color it
             state_selected = st.selectbox("Select a state to mark:", states_to_show, key="state_select_submit")
             
