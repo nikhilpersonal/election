@@ -145,8 +145,8 @@ if screen == "Submit Ballot":
                 # Clear edit mode
                 del st.session_state["edit_mode"]
 
-# Results page metrics without using 'color' in st.metric
-elif screen == "View Results":
+# Results page metrics with two columns layout
+if screen == "View Results":
     # Load all ballots
     ballots_df = pd.read_csv(ballots_file)
     
@@ -163,17 +163,26 @@ elif screen == "View Results":
     with st.expander(f"State-by-State Voting for {selected_user}", expanded=expander_open):
         st.table(user_df[["state", "choice", "electoral_votes"]].sort_values(by="state"))
     
-    # Calculate metrics
-    total_pot = ballots_df["username"].nunique() * 25
-    avg_blue_votes = user_df[(user_df["state"].isin(swing_states)) & (user_df["choice"] == "blue")]["electoral_votes"].mean()
-    avg_red_votes = user_df[(user_df["state"].isin(swing_states)) & (user_df["choice"] == "red")]["electoral_votes"].mean()
-
-    # Display Total Pot with green color using Markdown
-    st.write(f"<h3 style='color: green;'>Total Pot: ${total_pot}</h3>", unsafe_allow_html=True)
-
-    # Display other summary metrics
-    st.metric("Average Blue Votes (Swing States)", f"{avg_blue_votes:.1f}")
-    st.metric("Average Red Votes (Swing States)", f"{avg_red_votes:.1f}")
+    # Calculate selected user's total blue and red counts
+    selected_user_total_blue = user_df[user_df["choice"] == "blue"]["electoral_votes"].sum()
+    selected_user_total_red = user_df[user_df["choice"] == "red"]["electoral_votes"].sum()
+    
+    # Calculate average total blue and red counts for all users
+    avg_total_blue = filtered_df[filtered_df["choice"] == "blue"].groupby("username")["electoral_votes"].sum().mean()
+    avg_total_red = filtered_df[filtered_df["choice"] == "red"].groupby("username")["electoral_votes"].sum().mean()
+    
+    # Display the metrics in two columns
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader(f"{selected_user}'s Totals")
+        st.metric("Total Blue Votes", selected_user_total_blue)
+        st.metric("Total Red Votes", selected_user_total_red)
+    
+    with col2:
+        st.subheader("Average Totals of All Users")
+        st.metric("Average Total Blue Votes", f"{avg_total_blue:.1f}")
+        st.metric("Average Total Red Votes", f"{avg_total_red:.1f}")
 
     # Display map for the user's ballot
     map_center = [37.0902, -95.7129]
