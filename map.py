@@ -3,6 +3,8 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 import os
+
+# Set page config to wide layout
 st.set_page_config(layout="wide")
 
 # Define electoral votes and coordinates for each state (complete list)
@@ -34,8 +36,12 @@ electoral_votes = {
     "Wisconsin": (10, [44.268543, -89.616508]), "Wyoming": (3, [42.755966, -107.302490])
 }
 
-# Swing states
-swing_states = ["Arizona", "Georgia", "Michigan", "Nevada", "North Carolina", "Pennsylvania", "Wisconsin","Florida","Virginia","New Hampshire","Minnesota"]
+# Updated list of swing states
+swing_states = [
+    "Arizona", "Georgia", "Michigan", "Nevada", "North Carolina", 
+    "Pennsylvania", "Wisconsin", "Florida", "Virginia", 
+    "New Hampshire", "Minnesota", "Iowa"
+]
 
 # Load or initialize ballots CSV
 ballots_file = "ballots.csv"
@@ -47,23 +53,31 @@ screen = st.radio("Select Screen", ["Submit Ballot", "View Results"])
 
 if screen == "Submit Ballot":
     # Clear session state when a new username is entered
-    username = st.text_input("Enter your username to start:")
+    username = st.text_input("Enter your username to start or edit your ballot:")
     if username:
-        # Check if the user has already submitted a ballot
+        # Load ballots to check if the user already submitted
         ballots_df = pd.read_csv(ballots_file)
-        if username in ballots_df["username"].values:
-            st.warning("You have already submitted a ballot.")
-        else:
-            # Clear session state if a new user starts
-            if "user_map" not in st.session_state:
-                st.session_state.user_map = {state: "gray" for state in electoral_votes.keys()}
-                st.session_state.electoral_totals = {"blue": 0, "red": 0}
+        user_submitted = username in ballots_df["username"].values
 
-            # Toggle for swing states only
-            show_swing_states = st.checkbox("Show only Swing States", value=False)
+        if user_submitted and "edit_mode" not in st.session_state:
+            # Display only the option to edit the ballot
+            st.warning("You have already submitted a ballot.")
+            if st.button("Edit Ballot"):
+                st.session_state.edit_mode = True
+                # Prepopulate user's previous selections
+                user_votes = ballots_df[ballots_df["username"] == username].set_index("state")["choice"].to_dict()
+                st.session_state.user_map = {state: user_votes.get(state, "gray") for state in electoral_votes.keys()}
+                st.session_state.electoral_totals = {
+                    "blue": sum(votes for state, (votes, _) in electoral_votes.items() if st.session_state.user_map[state] == "blue"),
+                    "red": sum(votes for state, (votes, _) in electoral_votes.items() if st.session_state.user_map[state] == "red")
+                }
+
+        if not user_submitted or "edit_mode" in st.session_state:
+            # Show only swing states by default
+            show_swing_states = st.checkbox("Show only Swing States", value=True)
+            states_to_show = swing_states if show_swing_states else list(electoral_votes.keys())
             
             # Select a state and color it
-            states_to_show = swing_states if show_swing_states else list(electoral_votes.keys())
             state_selected = st.selectbox("Select a state to mark:", states_to_show, key="state_select_submit")
             
             if st.button("Mark Blue"):
@@ -99,8 +113,12 @@ if screen == "Submit Ballot":
             col1.metric("Total Democrat (Blue) Votes", st.session_state.electoral_totals["blue"])
             col2.metric("Total Republican (Red) Votes", st.session_state.electoral_totals["red"])
 
-            # Submit ballot button
-            if st.button("Submit Ballot"):
+            # Submit or Resubmit ballot button
+            if st.button("Submit/Resubmit Ballot"):
+                # Remove any previous entries for this user
+                ballots_df = ballots_df[ballots_df["username"] != username]
+                
+                # Prepare new ballot data
                 ballot_data = [
                     {
                         "username": username,
@@ -112,18 +130,21 @@ if screen == "Submit Ballot":
                     if st.session_state.user_map[state] in ["blue", "red"]
                 ]
                 
-                # Append to ballots file
+                # Overwrite ballots file with new data
                 ballot_df = pd.DataFrame(ballot_data)
-                ballot_df.to_csv(ballots_file, mode="a", header=False, index=False)
+                updated_ballots_df = pd.concat([ballots_df, ballot_df], ignore_index=True)
+                updated_ballots_df.to_csv(ballots_file, index=False)
                 
-                st.write("Your ballot has been submitted!")
+                st.write("Your ballot has been resubmitted!")
+                # Clear edit mode
+                del st.session_state["edit_mode"]
 
 elif screen == "View Results":
     # Load all ballots
     ballots_df = pd.read_csv(ballots_file)
     
     # Show only swing states if checked
-    show_swing_states_only = st.checkbox("Show only Swing States", value=False)
+    show_swing_states_only = st.checkbox("Show only Swing States", value=True)
     filtered_df = ballots_df[ballots_df["state"].isin(swing_states)] if show_swing_states_only else ballots_df
     
     # Dropdown to select a user and view their results
@@ -155,3 +176,11 @@ elif screen == "View Results":
         folium.Marker(location=coords, tooltip=f"{state} ({votes} votes)", icon=folium.Icon(color=color)).add_to(m)
 
     st_folium(m, width=700)
+    
+    # Download button for ballots file
+    st.download_button(
+        label="Download Ballots CSV",
+        data=ballots_df.to_csv(index=False),
+        file_name="ballots.csv",
+        mime="text/csv"
+    )
