@@ -3,6 +3,7 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 import os
+st.set_page_config(layout="wide")
 
 # Define electoral votes and coordinates for each state (complete list)
 electoral_votes = {
