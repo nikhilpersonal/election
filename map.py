@@ -79,7 +79,7 @@ non_swing_results = {
     "West Virginia": "red", "Indiana": "red", "Ohio": "red", "Maine": "blue",
     "Vermont": "blue", "New Jersey": "blue", "Connecticut": "blue", "Rhode Island": "blue",
     "Massachusetts": "blue", "Delaware": "blue", "Maryland": "blue", "Illinois": "blue",
-    "Hawaii": "blue", "Alaska": "red"
+    "Hawaii": "blue", "Alaska": "red", "Washington, D.C.": "blue"
 }
 
 
