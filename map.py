@@ -35,7 +35,7 @@ electoral_votes = {
 }
 
 # Swing states
-swing_states = ["Arizona", "Georgia", "Michigan", "Nevada", "North Carolina", "Pennsylvania", "Wisconsin"]
+swing_states = ["Arizona", "Georgia", "Michigan", "Nevada", "North Carolina", "Pennsylvania", "Wisconsin","Florida","Virginia","New Hampshire","Minnesota"]
 
 # Load or initialize ballots CSV
 ballots_file = "ballots.csv"
