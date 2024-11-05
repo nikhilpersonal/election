@@ -59,6 +59,12 @@ if screen == "Submit Ballot":
         ballots_df = pd.read_csv(ballots_file)
         user_submitted = username in ballots_df["username"].values
 
+        # Initialize session state for new users or editing users
+        if "user_map" not in st.session_state:
+            st.session_state.user_map = {state: "gray" for state in electoral_votes.keys()}
+        if "electoral_totals" not in st.session_state:
+            st.session_state.electoral_totals = {"blue": 0, "red": 0}
+
         if user_submitted and "edit_mode" not in st.session_state:
             # Display only the option to edit the ballot
             st.warning("You have already submitted a ballot.")
@@ -139,6 +145,7 @@ if screen == "Submit Ballot":
                 # Clear edit mode
                 del st.session_state["edit_mode"]
 
+# Results page metrics without using 'color' in st.metric
 elif screen == "View Results":
     # Load all ballots
     ballots_df = pd.read_csv(ballots_file)
@@ -156,13 +163,17 @@ elif screen == "View Results":
     with st.expander(f"State-by-State Voting for {selected_user}", expanded=expander_open):
         st.table(user_df[["state", "choice", "electoral_votes"]].sort_values(by="state"))
     
-    # Display summary metrics for the selected user
-    total_blue_votes = user_df[user_df["choice"] == "blue"]["electoral_votes"].sum()
-    total_red_votes = user_df[user_df["choice"] == "red"]["electoral_votes"].sum()
-    
-    col1, col2 = st.columns(2)
-    col1.metric("Total Democrat (Blue) Votes", total_blue_votes)
-    col2.metric("Total Republican (Red) Votes", total_red_votes)
+    # Calculate metrics
+    total_pot = ballots_df["username"].nunique() * 25
+    avg_blue_votes = user_df[(user_df["state"].isin(swing_states)) & (user_df["choice"] == "blue")]["electoral_votes"].mean()
+    avg_red_votes = user_df[(user_df["state"].isin(swing_states)) & (user_df["choice"] == "red")]["electoral_votes"].mean()
+
+    # Display Total Pot with green color using Markdown
+    st.write(f"<h3 style='color: green;'>Total Pot: ${total_pot}</h3>", unsafe_allow_html=True)
+
+    # Display other summary metrics
+    st.metric("Average Blue Votes (Swing States)", f"{avg_blue_votes:.1f}")
+    st.metric("Average Red Votes (Swing States)", f"{avg_red_votes:.1f}")
 
     # Display map for the user's ballot
     map_center = [37.0902, -95.7129]
