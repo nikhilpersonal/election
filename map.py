@@ -310,7 +310,15 @@ if screen == "View Results":
 
         # Leaderboard based on correct swing state percentage
         swing_state_df = ballots_df[ballots_df["state"].isin(swing_states)]
-        swing_state_accuracy = swing_state_df.groupby("username").apply(lambda x: (x["choice"] == x["actual_result"]).mean())
+        def calculate_accuracy(group):
+            if group.empty:  # No results announced
+                return None
+            correct_predictions = (group["choice"] == group["actual_result"]).sum()
+            total_announced = len(group)
+            return (correct_predictions / total_announced) * 100 if total_announced > 0 else None
+
+        swing_state_accuracy = swing_state_df.groupby("username").apply(calculate_accuracy)
+        
         leaderboard = swing_state_accuracy.sort_values(ascending=False).reset_index()
         leaderboard.columns = ["Username", "Correct Swing State %"]
         st.write("### Leaderboard: Correct Swing State %")
