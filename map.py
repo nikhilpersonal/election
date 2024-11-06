@@ -114,10 +114,111 @@ if st.sidebar.button("Save Results"):
     actual_results_df = pd.DataFrame(list(st.session_state.actual_results.items()), columns=["state", "actual_result"])
     actual_results_df.to_csv(actual_results_file, index=False)
     st.sidebar.success("Results saved!")
+    #st.experimental_rerun()
 
 # Main screen toggle
 screen = st.radio("Select Screen", ["Submit Ballot", "View Results"])
+if screen == "Submit Ballot":
+    # Clear session state when a new username is entered
+    username = st.text_input("Enter your username to start or edit your ballot:")
+    if username:
+        # Load ballots to check if the user already submitted
+        ballots_df = pd.read_csv(ballots_file)
+        user_submitted = username in ballots_df["username"].values
 
+        # Initialize session state for new users or editing users
+        if "user_map" not in st.session_state:
+            st.session_state.user_map = {state: "gray" for state in electoral_votes.keys()}
+        if "electoral_totals" not in st.session_state:
+            st.session_state.electoral_totals = {"blue": 0, "red": 0}
+
+        if user_submitted and "edit_mode" not in st.session_state:
+            # Display only the option to edit the ballot
+            st.warning("You have already submitted a ballot.")
+            if st.button("Edit Ballot"):
+                st.session_state.edit_mode = True
+                # Prepopulate user's previous selections
+                user_votes = ballots_df[ballots_df["username"] == username].set_index("state")["choice"].to_dict()
+                st.session_state.user_map = {state: user_votes.get(state, "gray") for state in electoral_votes.keys()}
+                st.session_state.electoral_totals = {
+                    "blue": sum(votes for state, (votes, _) in electoral_votes.items() if st.session_state.user_map[state] == "blue"),
+                    "red": sum(votes for state, (votes, _) in electoral_votes.items() if st.session_state.user_map[state] == "red")
+                }
+
+        if not user_submitted or "edit_mode" in st.session_state:
+            # Show only swing states by default
+            show_swing_states = st.checkbox("Show only Swing States", value=True)
+            states_to_show = swing_states if show_swing_states else list(electoral_votes.keys())
+            if st.button("Autopopulate Non-Swing States"):
+                for state, color in non_swing_results.items():
+                    if state not in swing_states:
+                        st.session_state.user_map[state] = color
+                        # Update electoral totals
+                        if color == "blue":
+                            st.session_state.electoral_totals["blue"] += electoral_votes[state][0]
+                        elif color == "red":
+                            st.session_state.electoral_totals["red"] += electoral_votes[state][0]
+            # Select a state and color it
+            state_selected = st.selectbox("Select a state to mark:", states_to_show, key="state_select_submit")
+            
+            if st.button("Mark Blue"):
+                if st.session_state.user_map[state_selected] != "blue":
+                    if st.session_state.user_map[state_selected] == "red":
+                        st.session_state.electoral_totals["red"] -= electoral_votes[state_selected][0]
+                    st.session_state.user_map[state_selected] = "blue"
+                    st.session_state.electoral_totals["blue"] += electoral_votes[state_selected][0]
+            
+            if st.button("Mark Red"):
+                if st.session_state.user_map[state_selected] != "red":
+                    if st.session_state.user_map[state_selected] == "blue":
+                        st.session_state.electoral_totals["blue"] -= electoral_votes[state_selected][0]
+                    st.session_state.user_map[state_selected] = "red"
+                    st.session_state.electoral_totals["red"] += electoral_votes[state_selected][0]
+
+            # Create Folium map
+            map_center = [37.0902, -95.7129]  # Center of the US
+            m = folium.Map(location=map_center, zoom_start=4)
+
+            # Add markers for each state based on user selections
+            for state, (votes, coords) in electoral_votes.items():
+                if show_swing_states and state not in swing_states:
+                    continue
+                color = "blue" if st.session_state.user_map[state] == "blue" else "red" if st.session_state.user_map[state] == "red" else "gray"
+                folium.Marker(location=coords, tooltip=f"{state} ({votes} votes)", icon=folium.Icon(color=color)).add_to(m)
+
+            # Display the map
+            st_folium(m, width=700)
+
+            # Display electoral vote totals in line
+            col1, col2 = st.columns(2)
+            col1.metric("Total Democrat (Blue) Votes", st.session_state.electoral_totals["blue"])
+            col2.metric("Total Republican (Red) Votes", st.session_state.electoral_totals["red"])
+
+            # Submit or Resubmit ballot button
+            if st.button("Submit/Resubmit Ballot"):
+                # Remove any previous entries for this user
+                ballots_df = ballots_df[ballots_df["username"] != username]
+                
+                # Prepare new ballot data
+                ballot_data = [
+                    {
+                        "username": username,
+                        "state": state,
+                        "choice": st.session_state.user_map[state],
+                        "electoral_votes": electoral_votes[state][0]
+                    }
+                    for state in st.session_state.user_map.keys()
+                    if st.session_state.user_map[state] in ["blue", "red"]
+                ]
+                
+                # Overwrite ballots file with new data
+                ballot_df = pd.DataFrame(ballot_data)
+                updated_ballots_df = pd.concat([ballots_df, ballot_df], ignore_index=True)
+                updated_ballots_df.to_csv(ballots_file, index=False)
+                
+                st.write("Your ballot has been resubmitted!")
+                # Clear edit mode
+                del st.session_state["edit_mode"]
 if screen == "View Results":
     # Load all ballots
     ballots_df = pd.read_csv(ballots_file)
@@ -154,7 +255,7 @@ if screen == "View Results":
             st.table(user_df[["state", "choice", "electoral_votes", "actual_result"]].sort_values(by="state"))
         
         # Calculate the Total Pot
-        total_pot = ballots_df["username"].nunique() * 25 - 25
+        total_pot = ballots_df["username"].nunique() * 25 - 75
         st.write(f"<h3 style='color: green;'>Total Pot: ${total_pot}</h3>", unsafe_allow_html=True)
 
         # Calculate selected user's total blue and red counts
@@ -205,47 +306,28 @@ if screen == "View Results":
 
         # Leaderboard based on correct swing state percentage
         swing_state_df = ballots_df[ballots_df["state"].isin(swing_states)]
-        swing_state_accuracy = swing_state_df.groupby("username").apply(lambda x: (x["choice"] == x["actual_result"]).mean())
-        leaderboard = swing_state_accuracy.sort_values(ascending=False).reset_index()
+
+        # Filter out states where the actual result is "Not Announced"
+        swing_state_df = swing_state_df[swing_state_df["actual_result"] != "Not Announced"]
+
+        # Calculate accuracy only for states with announced results
+        def calculate_accuracy(group):
+            if group.empty:  # No results announced
+                return None
+            correct_predictions = (group["choice"] == group["actual_result"]).sum()
+            total_announced = len(group)
+            return (correct_predictions / total_announced) * 100 if total_announced > 0 else None
+
+        swing_state_accuracy = swing_state_df.groupby("username").apply(calculate_accuracy)
+
+        # Prepare leaderboard DataFrame
+        leaderboard = swing_state_accuracy.reset_index()
         leaderboard.columns = ["Username", "Correct Swing State %"]
+        
+        # Replace NaN values with empty strings to represent no announced results
+        leaderboard["Correct Swing State %"] = leaderboard["Correct Swing State %"].apply(
+            lambda x: "" if pd.isna(x) else f"{x:.1f}%"
+        )
+
         st.write("### Leaderboard: Correct Swing State %")
         st.table(leaderboard)
-
-        # Chart 1: Swing States Bar Chart with Red/Blue Colors
-        swing_state_votes = ballots_df[ballots_df["state"].isin(swing_states)].groupby(["state", "choice"]).size().unstack(fill_value=0)
-        swing_state_chart = px.bar(
-            swing_state_votes,
-            barmode="group",
-            title="Swing States - Blue vs Red Votes",
-            color_discrete_map={"blue": "blue", "red": "red"}
-        )
-        swing_state_chart.update_layout(xaxis_title="State", yaxis_title="Vote Count")
-        st.plotly_chart(swing_state_chart)
-
-        # Chart 2: Pie Chart for selected state with Red/Blue Colors
-        selected_pie_state = st.selectbox("Select a state for pie chart:", ballots_df["state"].unique(), key="state_select_pie")
-        state_vote_counts = ballots_df[ballots_df["state"] == selected_pie_state]["choice"].value_counts()
-        pie_chart = px.pie(
-            state_vote_counts,
-            names=state_vote_counts.index,
-            values=state_vote_counts.values,
-            title=f"Vote Distribution in {selected_pie_state}",
-            color_discrete_map={"blue": "blue", "red": "red"}
-        )
-        st.plotly_chart(pie_chart)
-
-        # Chart 3: Shared Opinions Histogram with Red/Blue Colors
-        shared_opinions = ballots_df.groupby(["state", "choice"]).size().reset_index(name="count")
-        shared_opinions_chart = px.histogram(
-            shared_opinions,
-            x="state",
-            y="count",
-            color="choice",
-            barmode="group",
-            title="Distribution of Shared Opinions by State and Choice",
-            color_discrete_map={"blue": "blue", "red": "red"}
-        )
-        st.plotly_chart(shared_opinions_chart)
-        
-    # Download button for ballots file
-
