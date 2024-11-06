@@ -101,9 +101,15 @@ else:
 if "actual_results" not in st.session_state:
     st.session_state.actual_results = default_actual_results.set_index("state")["actual_result"].to_dict()
 
-# Sidebar for inputting actual results
+
+st.sidebar.header("Settings")
+show_only_swing_states = st.sidebar.checkbox("Show Only Swing States", value=True)
+
 st.sidebar.header("Enter Actual Results")
-for state in electoral_votes.keys():
+
+# Display inputs for actual results based on the toggle
+states_to_display = swing_states if show_only_swing_states else list(electoral_votes.keys())
+for state in states_to_display:
     st.session_state.actual_results[state] = st.sidebar.selectbox(
         f"{state} Result", ["Not Announced", "blue", "red"], 
         index=["Not Announced", "blue", "red"].index(st.session_state.actual_results[state])
