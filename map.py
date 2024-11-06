@@ -154,7 +154,7 @@ if screen == "View Results":
             st.table(user_df[["state", "choice", "electoral_votes", "actual_result"]].sort_values(by="state"))
         
         # Calculate the Total Pot
-        total_pot = ballots_df["username"].nunique() * 25 - 75
+        total_pot = ballots_df["username"].nunique() * 25 - 25
         st.write(f"<h3 style='color: green;'>Total Pot: ${total_pot}</h3>", unsafe_allow_html=True)
 
         # Calculate selected user's total blue and red counts
