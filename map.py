@@ -114,10 +114,11 @@ if st.sidebar.button("Save Results"):
     actual_results_df = pd.DataFrame(list(st.session_state.actual_results.items()), columns=["state", "actual_result"])
     actual_results_df.to_csv(actual_results_file, index=False)
     st.sidebar.success("Results saved!")
-    #st.experimental_rerun()
 
 # Main screen toggle
 screen = st.radio("Select Screen", ["Submit Ballot", "View Results"])
+
+
 if screen == "Submit Ballot":
     # Clear session state when a new username is entered
     username = st.text_input("Enter your username to start or edit your ballot:")
@@ -219,6 +220,9 @@ if screen == "Submit Ballot":
                 st.write("Your ballot has been resubmitted!")
                 # Clear edit mode
                 del st.session_state["edit_mode"]
+
+
+
 if screen == "View Results":
     # Load all ballots
     ballots_df = pd.read_csv(ballots_file)
@@ -306,28 +310,47 @@ if screen == "View Results":
 
         # Leaderboard based on correct swing state percentage
         swing_state_df = ballots_df[ballots_df["state"].isin(swing_states)]
-
-        # Filter out states where the actual result is "Not Announced"
-        swing_state_df = swing_state_df[swing_state_df["actual_result"] != "Not Announced"]
-
-        # Calculate accuracy only for states with announced results
-        def calculate_accuracy(group):
-            if group.empty:  # No results announced
-                return None
-            correct_predictions = (group["choice"] == group["actual_result"]).sum()
-            total_announced = len(group)
-            return (correct_predictions / total_announced) * 100 if total_announced > 0 else None
-
-        swing_state_accuracy = swing_state_df.groupby("username").apply(calculate_accuracy)
-
-        # Prepare leaderboard DataFrame
-        leaderboard = swing_state_accuracy.reset_index()
+        swing_state_accuracy = swing_state_df.groupby("username").apply(lambda x: (x["choice"] == x["actual_result"]).mean())
+        leaderboard = swing_state_accuracy.sort_values(ascending=False).reset_index()
         leaderboard.columns = ["Username", "Correct Swing State %"]
-        
-        # Replace NaN values with empty strings to represent no announced results
-        leaderboard["Correct Swing State %"] = leaderboard["Correct Swing State %"].apply(
-            lambda x: "" if pd.isna(x) else f"{x:.1f}%"
-        )
-
         st.write("### Leaderboard: Correct Swing State %")
         st.table(leaderboard)
+
+        # Chart 1: Swing States Bar Chart with Red/Blue Colors
+        swing_state_votes = ballots_df[ballots_df["state"].isin(swing_states)].groupby(["state", "choice"]).size().unstack(fill_value=0)
+        swing_state_chart = px.bar(
+            swing_state_votes,
+            barmode="group",
+            title="Swing States - Blue vs Red Votes",
+            color_discrete_map={"blue": "blue", "red": "red"}
+        )
+        swing_state_chart.update_layout(xaxis_title="State", yaxis_title="Vote Count")
+        st.plotly_chart(swing_state_chart)
+
+        # Chart 2: Pie Chart for selected state with Red/Blue Colors
+        selected_pie_state = st.selectbox("Select a state for pie chart:", ballots_df["state"].unique(), key="state_select_pie")
+        state_vote_counts = ballots_df[ballots_df["state"] == selected_pie_state]["choice"].value_counts()
+        pie_chart = px.pie(
+            state_vote_counts,
+            names=state_vote_counts.index,
+            values=state_vote_counts.values,
+            title=f"Vote Distribution in {selected_pie_state}",
+            color_discrete_map={"blue": "blue", "red": "red"}
+        )
+        st.plotly_chart(pie_chart)
+
+        # Chart 3: Shared Opinions Histogram with Red/Blue Colors
+        shared_opinions = ballots_df.groupby(["state", "choice"]).size().reset_index(name="count")
+        shared_opinions_chart = px.histogram(
+            shared_opinions,
+            x="state",
+            y="count",
+            color="choice",
+            barmode="group",
+            title="Distribution of Shared Opinions by State and Choice",
+            color_discrete_map={"blue": "blue", "red": "red"}
+        )
+        st.plotly_chart(shared_opinions_chart)
+        
+    # Download button for ballots file
+
